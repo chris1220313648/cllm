@@ -13,6 +13,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
+import numpy as np
 
 from dataclasses import dataclass, field
 import json
@@ -105,29 +106,29 @@ def preprocess_distill_data(
     jacobian_trajectory_ids = []
     # only take batch size 1 for now
     # TODO: support bsz > 1 from the generation script. for now, only prompt ids is in (bsz, seq_len)
-    jacobian_prompt_ids = torch.tensor(prompt_ids[0], dtype=torch.int64)
-    teacher_output_ids = torch.tensor(teacher_output_ids[0], dtype=torch.int64)
-    complete_teacher_output_ids = torch.tensor(complete_teacher_output_ids, dtype=torch.int64)
+    jacobian_prompt_ids = torch.tensor(prompt_ids[0], dtype=torch.int64)#2维，原来3维
+    teacher_output_ids = torch.tensor(teacher_output_ids[0], dtype=torch.int64)#1维度 原来2维
+    complete_teacher_output_ids = torch.tensor(complete_teacher_output_ids, dtype=torch.int64)#1维
     for answer_ids in answer_trajectory_ids:
         answer_ids = torch.tensor(answer_ids, dtype=torch.int64)
         #print(answer_ids)
         #print(jacobian_prompt_ids)
         if len(jacobian_prompt_ids.shape) == len(answer_ids.shape):
             trajectory_ids = torch.cat((jacobian_prompt_ids, answer_ids), dim=-1)
-        elif len(jacobian_prompt_ids.shape) > len(answer_ids.shape):
+        elif len(jacobian_prompt_ids.shape) > len(answer_ids.shape):#进入这个循环
             #print(f'prompt: {jacobian_prompt_ids.shape}')
             #print(f'answer: {answer_ids.shape}')
             trajectory_ids = torch.cat((jacobian_prompt_ids[0], answer_ids), dim=-1)
         # print(trajectory_ids.shape) # torch.Size([228])
-        jacobian_trajectory_ids.append(trajectory_ids)
+        jacobian_trajectory_ids.append(trajectory_ids)#重新构建，包括prompt+gernerate n token  2维
    
     if labels_ids:
         return dict(
-            jacobian_trajectory=jacobian_trajectory_ids,
+            jacobian_trajectory=jacobian_trajectory_ids,#包括prompt的雅可比序列2维度
             attention_mask=jacobian_trajectory_ids[0].ne(tokenizer.pad_token_id),
-            labels_ids=labels_ids,
-            teacher_output_ids=teacher_output_ids,
-            complete_teacher_output_ids=complete_teacher_output_ids
+            labels_ids=labels_ids,#2维
+            teacher_output_ids=teacher_output_ids,#1维
+            complete_teacher_output_ids=complete_teacher_output_ids#1维
         )
     else:
         return dict(
@@ -194,6 +195,7 @@ def make_jacobian_data_module(
     rank0_print("Loading data...")
 
     train_json = json.load(open(trajectory_path, "r"))
+    print("train_json；",type(train_json))
     truncated_train_json = []
     
     for data in train_json:
@@ -203,6 +205,9 @@ def make_jacobian_data_module(
                                 tokenizer=tokenizer,
                                 model=model,
                                 local_rank=local_rank)
+    print(type(train_dataset[0]["jacobian_trajectory"]))
+    answer_trajectory_ids_np = np.array(train_dataset[0]["jacobian_trajectory"])
+    print(answer_trajectory_ids_np.shape)
     eval_dataset = None
 
     return dict(train_dataset=train_dataset, eval_dataset=eval_dataset)
@@ -264,7 +269,7 @@ def train():
         attn_implementation='flash_attention_2',
         device_map='cuda',
         torch_dtype=torch.bfloat16,
-    )
+    )#这是一个LlamaForCausalLM模型
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_args.target_model_path,

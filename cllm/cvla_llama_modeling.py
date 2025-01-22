@@ -246,9 +246,10 @@ def jacobi_forward(
 
 
 @torch.inference_mode()
-def jacobi_forward_profiling(
+def cvla_jacobi_forward_profiling(
     self,
     input_ids: torch.LongTensor = None,
+    images_tensor: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
     position_ids: Optional[torch.LongTensor] = None,
     past_key_values: Optional[List[torch.FloatTensor]] = None,
@@ -256,6 +257,25 @@ def jacobi_forward_profiling(
     max_new_tokens: Optional[int] = None,
     prefill_phase: Optional[bool] = False,
 ):
+    def embedding_generate( vla_model,input_ids, images_tensor,image_sizes: Optional[torch.Tensor] = None):
+        position_ids=None
+        attention_mask=None
+        (
+                inputs,
+                position_ids,
+                attention_mask,
+                _,
+                inputs_embeds,
+                _
+            )=  vla_model.prepare_inputs_labels_for_multimodal(                
+                input_ids.cuda(),
+                position_ids,
+                attention_mask,
+                None,
+                None,
+                images=images_tensor.to(dtype=torch.float16, device="cuda", non_blocking=True),#本来是float16
+                image_sizes=image_sizes)
+        return inputs_embeds,attention_mask
     
     assert use_cache == True
 
@@ -266,7 +286,11 @@ def jacobi_forward_profiling(
     
     if prefill_phase: # prefill phase, just compute the keys & values of prompt
         # self.model is the instance of class LlamaModel
-        inputs_embeds = self.model.embed_tokens(input_ids)
+        inputs_embeds,attention_mask = embedding_generate(self,input_ids,images_tensor)
+        seq_length= inputs_embeds.shape[1]
+        # attention_mask=attention_mask.squeeze(1)
+        print("seq_length:",seq_length)
+        # print("attention_mask:",attention_mask.shape)
         past_key_values_length = 0
         if use_cache:
             use_legacy_cache = not isinstance(past_key_values, Cache)
@@ -301,7 +325,7 @@ def jacobi_forward_profiling(
         # embed positions
         hidden_states = inputs_embeds
 
-        # decoder layers
+        # # decoder layers
         for decoder_layer in self.model.layers:
 
             layer_outputs = decoder_layer(
@@ -336,15 +360,16 @@ def jacobi_forward_profiling(
         accurate_length = 0
         next_point = input_ids
         jacobian_trajectory.append(next_point)
-
+        inputs_embeds,attention_mask = embedding_generate(self,input_ids,images_tensor)
         iter_counter = 0
-        while True:
-
+        while True:           
             current_point = next_point
-            inputs_embeds = self.model.embed_tokens(current_point)
-            attention_mask = None
+            inputs_embeds,attention_mask = embedding_generate(self,current_point,images_tensor)
+            # inputs_embeds = self.model.embed_tokens(current_point)
+            # attention_mask = None #原来是none
             position_ids = None
-            seq_length = current_point.shape[1]
+            # seq_length = current_point.shape[1]
+            seq_length = inputs_embeds.shape[1]
             if use_cache:
                 use_legacy_cache = not isinstance(past_key_values, Cache)
                 if use_legacy_cache:
@@ -401,12 +426,13 @@ def jacobi_forward_profiling(
 
             logits = logits.float()
             all_shift_one_token = torch.argmax(torch.nn.functional.softmax(logits, dim=-1) / 0.01, dim=-1)
-            next_point= torch.cat((current_point[0, 0].view(1,-1), all_shift_one_token[0, :seq_length-1].view(1,-1)), dim=-1)
+            next_point= torch.cat((current_point[0, 0].view(1,-1), all_shift_one_token[0, -max_new_tokens:-1].view(1,-1)), dim=-1)
+            print("next_point.shape:",next_point.shape)
             jacobian_trajectory.append(next_point)
             
             if torch.all(torch.eq(current_point, next_point)).item():    
-                #print('Successfully break!')
-                #print(next_point)
+                print('Successfully break!')
+                print(next_point)
                 first_correct_token = torch.argmax(torch.nn.functional.softmax(logits, dim=-1), dim=-1)[:,-1]
                 break
             past_key_values.delete_false_key_value(seq_length)

@@ -73,57 +73,115 @@ def detect_repetitive_patterns(tokenizer, prompt_ids, repeat_ngram_size):
 
     return False
 
+# def jacobian_generated_data_postprocessed(generated_data, model_path):
+#     tokenizer = AutoTokenizer.from_pretrained(model_path)
+#     low_quality_data_id_lst = []#记录低质量数据序号
+#     # delete low quality data with repetitive pattern
+#     for i, d in enumerate(generated_data):
+#         if detect_repetitive_patterns(tokenizer, np.array(d['teacher_output_ids']), repeat_ngram_size=10):
+#             prompt_ids = np.array(d['teacher_output_ids'])
+#             if len(prompt_ids.shape)==2:
+#                 prompt_ids = prompt_ids[0]
+#             elif len(prompt_ids.shape)==3:
+#                 prompt_ids = prompt_ids[0][0]
+#             print(f'Low quality generation detected: {tokenizer.decode(prompt_ids)}')
+#             low_quality_data_id_lst.append(i)
+#     print(f'{len(low_quality_data_id_lst)} low quality data detected. {len(low_quality_data_id_lst)/len(generated_data)} percent of low quality data.')
+
+#     # add complete teacher outputs
+#     teacher_output_inspector = {}#记录第data_i的teacher_output，记录所有itr的
+#     for d in generated_data: 
+#         data_id = d["data_id"]
+#         if data_id in teacher_output_inspector.keys():
+#             all_teacher_output_map = teacher_output_inspector[data_id]
+#         else:
+#             all_teacher_output_map = {}#记录第itr的teacher_output
+#             #print(data_id)
+#         itr = d["jacobian_itr_id"]
+#         # handle bsz=1 case only
+#         all_teacher_output_map[itr] = d["teacher_output_ids"][0]#增加记录
+#         teacher_output_inspector[data_id] = all_teacher_output_map
+# # teacher_output_inspector = {
+# #     "data_1": {
+# #         "itr_1": [1, 2, 3, 4, 5, 6],
+# #         "itr_2": [7, 8, 9, 10, 11, ，1，1，1，1，1，1，，]
+# #     },
+# #     "data_2": {
+# #         "itr_1": [13, 14, 15, 16, 17, 18],
+# #         "itr_2": [19, 20, 21, 22, 23, 24]
+# #     }
+# # }
+#     teacher_output_collector = {}#记录记录第data_i的teacher_output，只记录最后itr的
+#     for d_id in teacher_output_inspector.keys():
+#         all_teacher_output_map = teacher_output_inspector[d_id]
+#         all_itr = [int(s.split('_')[1]) for s in all_teacher_output_map.keys()]
+#         print(all_itr)
+#         max_itr = max(all_itr)
+#         max_itr_s = "itr_" + str(max_itr)
+#         complete_teacher_output = all_teacher_output_map[max_itr_s]
+#         teacher_output_collector[d_id] = complete_teacher_output
+# # teacher_output_collector = {
+# #     "data_1": [7, 8, 9, 10, 11, 12，1，1，1，1，1，1，],
+# #     "data_2": [19, 20, 21, 22, 23, 24]
+# # }
+
+#     f_result = []
+#     for d in generated_data:#增加complete_teacher_output_ids项，理论上和label_id一样
+#         data_id = d["data_id"]
+#         complete_teacher_output = teacher_output_collector[data_id]
+#         d["complete_teacher_output_ids"] = complete_teacher_output
+#         f_result.append(d)
+    
+#     cleaned_f_result = []
+#     for i, d in enumerate(generated_data):#清楚带有重复项目的数据
+#         if i in low_quality_data_id_lst:
+#             continue
+#         cleaned_f_result.append(d)
+
+
+#     return cleaned_f_result
+
+#优化
 def jacobian_generated_data_postprocessed(generated_data, model_path):
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-    low_quality_data_id_lst = []
-    # delete low quality data with repetitive pattern
+    low_quality_data_id_lst = []  # 记录低质量数据序号
+    
+    # 删除低质量数据：检测重复模式
     for i, d in enumerate(generated_data):
         if detect_repetitive_patterns(tokenizer, np.array(d['teacher_output_ids']), repeat_ngram_size=10):
             prompt_ids = np.array(d['teacher_output_ids'])
-            if len(prompt_ids.shape)==2:
+            if len(prompt_ids.shape) == 2:
                 prompt_ids = prompt_ids[0]
-            elif len(prompt_ids.shape)==3:
+            elif len(prompt_ids.shape) == 3:
                 prompt_ids = prompt_ids[0][0]
+            
             print(f'Low quality generation detected: {tokenizer.decode(prompt_ids)}')
             low_quality_data_id_lst.append(i)
-    print(f'{len(low_quality_data_id_lst)} low quality data detected. {len(low_quality_data_id_lst)/len(generated_data)} percent of low quality data.')
-
-    # add complete teacher outputs
-    teacher_output_inspector = {}
-    for d in generated_data:
-        data_id = d["data_id"]
-        if data_id in teacher_output_inspector.keys():
-            all_teacher_output_map = teacher_output_inspector[data_id]
-        else:
-            all_teacher_output_map = {}
-            #print(data_id)
-        itr = d["jacobian_itr_id"]
-        # handle bsz=1 case only
-        all_teacher_output_map[itr] = d["teacher_output_ids"][0]
-        teacher_output_inspector[data_id] = all_teacher_output_map
-
-    teacher_output_collector = {}
-    for d_id in teacher_output_inspector.keys():
-        all_teacher_output_map = teacher_output_inspector[d_id]
-        all_itr = [int(s.split('_')[1]) for s in all_teacher_output_map.keys()]
-        print(all_itr)
-        max_itr = max(all_itr)
-        max_itr_s = "itr_" + str(max_itr)
-        complete_teacher_output = all_teacher_output_map[max_itr_s]
-        teacher_output_collector[d_id] = complete_teacher_output
-
-    f_result = []
-    for d in generated_data:
-        data_id = d["data_id"]
-        complete_teacher_output = teacher_output_collector[data_id]
-        d["complete_teacher_output_ids"] = complete_teacher_output
-        f_result.append(d)
     
+    print(f'{len(low_quality_data_id_lst)} low quality data detected. {len(low_quality_data_id_lst) / len(generated_data):.2%} percent of low quality data.')
+
+    # 记录每个 data_id 对应的所有迭代的 teacher output
+    teacher_output_inspector = {}  # 存储每个data_id对应所有itr的teacher_output
+    for d in generated_data:
+        data_id = d["data_id"]
+        itr = d["jacobian_itr_id"]
+        if data_id not in teacher_output_inspector:
+            teacher_output_inspector[data_id] = {}
+        teacher_output_inspector[data_id][itr] = d["teacher_output_ids"][0]
+    
+    # 记录每个 data_id 对应的最后一个 teacher output
+    teacher_output_collector = {}  # 存储每个data_id对应最后一个itr的teacher_output
+    for data_id, all_teacher_output_map in teacher_output_inspector.items():
+        max_itr = max(int(s.split('_')[1]) for s in all_teacher_output_map.keys())
+        max_itr_s = f"itr_{max_itr}"
+        teacher_output_collector[data_id] = all_teacher_output_map[max_itr_s]
+
+    # 处理生成的数据，清理低质量数据
     cleaned_f_result = []
     for i, d in enumerate(generated_data):
-        if i in low_quality_data_id_lst:
-            continue
-        cleaned_f_result.append(d)
-
+        if i not in low_quality_data_id_lst:
+            data_id = d["data_id"]
+            d["complete_teacher_output_ids"] = teacher_output_collector[data_id]
+            cleaned_f_result.append(d)
 
     return cleaned_f_result
