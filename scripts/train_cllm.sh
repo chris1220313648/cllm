@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=1
 export WANDB_PROJECT=consistency_llm
 model_path=/home/wenxuansong/chenjy/project/Consistency_LLM/models/Abel-7B-001
 trajectory_file=/home/wenxuansong/chenjy/project/Consistency_LLM/data/collected_jacobi_trajectory/cleaned_gsm8k_train.jsonl_jacobi_max_new_tokens16_augFalse_labels_False_max_seq_len_64.json
@@ -20,7 +20,7 @@ torchrun --nnodes=1 --nproc_per_node=1 --rdzv_id=101 --rdzv_endpoint='localhost:
     --gradient_accumulation_steps 1 \
     --gradient_checkpointing True \
     --save_strategy "steps" \
-    --save_steps 100 \
+    --save_steps 100000 \
     --save_total_limit 50 \
     --learning_rate 2e-5 \
     --weight_decay 0. \

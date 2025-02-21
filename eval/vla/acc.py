@@ -10,7 +10,7 @@ import sys
 import pdb
 import random
 from math_normalization import *
-
+from flask import Flask, jsonify, request, Response
 ###
 from cllm.train_cvla_global import CLLMRobotgenerate
 import numpy as np
@@ -33,7 +33,7 @@ import datasets
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 from typing import Dict
-
+import time
 
 
 from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
@@ -91,7 +91,8 @@ def consistency_generate(
         input_ids = generation
 
 def consistency_generate_cvla(
-        raw_data, 
+        input_ids, 
+        image_tensor,
         model, 
         tokenizer,
         max_new_tokens, 
@@ -100,9 +101,8 @@ def consistency_generate_cvla(
         device, 
         ):
     
-
-    input_ids = torch.Tensor(raw_data['sources_input_ids']).squeeze(0).to(device=device, dtype=torch.int)
-    image_tensor = raw_data['image_tensor'].unsqueeze(0).to(device=device, dtype=torch.int)
+    # print("input_ids.shape:",input_ids.shape)
+    # print("image_tensor.shape:",image_tensor.shape)
     bsz = input_ids.shape[0]
     itr = 0
     eos_reached = False
@@ -135,7 +135,13 @@ def consistency_generate_cvla(
         ### see if next max_new_tokens should be generated & if True, update weights and prepare new input_ids
         itr+=1      
         if eos_reached or itr*max_new_tokens >= max_new_seq_len:
-            return generation[0, :total_token_len]
+            actions = []
+            # print("total_token_len:",total_token_len)
+            output_ids=generation[0,total_token_len-35 :total_token_len].cpu().numpy().tolist()
+            for elem in output_ids:
+                actions.append(vla_model_initialization.action_tokenizer.decode_token_ids_to_actions(elem))
+            # actions = np.array(actions)
+            return actions
         input_ids = generation
     
 @torch.inference_mode()
@@ -237,123 +243,7 @@ def get_vla_jacobian_trajectory(#bsz一般是1,这里传进来的是vla模型
             return trajectory[:-1], logits_trajectory[-1], eos_reached # converged generation is saved twice so we delete the last element of trajectory list
         itr+=1
 
-def get_results(pred_file, dev_set):
-    def test_answer(pred_str, ans_str):
-        pattern = "#### (.*)$"
 
-        if "Question" in pred_str:
-            pred_str = pred_str.split("Question")[0]
-
-        preds = re.findall(pattern, pred_str)
-        pred = preds[-1] if len(preds) >= 1 else ""
-        if "</s>" in pred:
-            pred = pred[:-4]
-
-        gold = ans_str
-        pred = normalize_final_answer(pred)
-        gold = normalize_final_answer(gold)
-        return check_sympy_equivalence(gold, pred), pred, gold
-
-    def parse_pred_ans(preds_str, golds_str, properties_list):
-        num_q = 0
-        acc = 0
-        results = []
-        preds = []
-        golds = []
-        correct_table = {}
-        cnt_table = {}
-        source_set = set()
-        for pred_str, gold_str, properties in tqdm(zip(preds_str, golds_str, properties_list), total=len(preds_str)):
-            num_q += 1
-            result, pred, gold = test_answer(pred_str, gold_str)
-            results.append(result)
-            preds.append(pred)
-            golds.append(gold)
-            if result:
-                acc += 1
-            source = properties['source']
-            tag = properties['tag']
-            source_set.add(source)
-            if source not in correct_table.keys():
-                correct_table[source] = 1 if result else 0
-                cnt_table[source] = 1
-            else:
-                correct_table[source] = (correct_table[source] + 1) if result else correct_table[source]
-                cnt_table[source] += 1
-            for key in tag.keys():
-                value = tag[key]
-                value = source+","+key+"__"+value
-                if value not in correct_table.keys():
-                    correct_table[value] = 1 if result else 0
-                    cnt_table[value] = 1
-                else:
-                    correct_table[value] = (correct_table[value] + 1) if result else correct_table[value]
-                    cnt_table[value] += 1
-        print('num_q %d correct %d ratio %.4f' % (num_q, acc, float(acc / num_q)))
-        acc_table = {}
-        for key in correct_table.keys():
-            acc_table[key] = correct_table[key] / cnt_table[key]
-        acc_table = list(zip(acc_table.keys(), acc_table.values()))
-        acc_table.sort(key=lambda x: x[0])
-        for key, acc in acc_table:
-            if key in source_set:
-                print(key+" : "+str(acc))
-            else:
-                print("    " + key.split(",")[-1]+ " : " + str(acc))
-        return results, preds, golds
-
-    if dev_set in ['all', 'gsm8k', 'math', 'mathgpt', 'gsm8k_robust']:
-        golds_str = []
-        properties = []
-        with open(f'test.jsonl', 'r', encoding='utf-8') as f:
-            for line in f:
-                if dev_set != "all":
-                    if json.loads(line)['source'].lower() == dev_set:
-                        golds_str.append(json.loads(line)['target'])
-                        properties.append({"source": json.loads(line)['source'], "tag": json.loads(line)['tag']})
-                else:
-                    golds_str.append(json.loads(line)['target'])
-                    properties.append({"source": json.loads(line)['source'], "tag": json.loads(line)['tag']})
-        preds_str = []
-        with open(pred_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                preds_str.append(json.loads(line)['response'])
-        results, preds, golds = parse_pred_ans(preds_str, golds_str, properties)
-        with open(pred_file, 'r', encoding='utf-8') as f:
-            data = [json.loads(line) for line in f]
-        for i, line in enumerate(data):
-            line['pred'] = preds[i]
-            line['gold'] = golds[i]
-            line['result'] = results[i]
-
-        # Save the updated list of dictionaries back to the jsonl file
-        with open(pred_file, 'w') as file:
-            for item in data:
-                file.write(json.dumps(item) + '\n')
-
-    else:
-        raise NotImplementedError("Evaluation not supported.")
-
-
-def get_raw_inputs(dev_set):
-    # in this function, we will get the raw queries for a target dev set
-    data = []
-    if dev_set in ['all', 'gsm8k', 'math', 'mathgpt', 'gsm8k_robust']:
-        with open(f'test.jsonl') as f:
-            for line in jsonlines.Reader(f):
-                data.append(line)
-        if dev_set != 'all':
-            data = [line for line in data if line['source'].lower() == dev_set]
-    else:
-        raise ValueError
-
-    prompt_list = [line['question'] for line in data]
-    return prompt_list
-
-
-prompt_mapping = {
-    "math-single": "Question:\n{input}\nAnswer:\nLet's think step by step.\n",
-}
 # 计算差的绝对值的和
 def calculate_absolute_difference(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -398,6 +288,7 @@ if __name__ == '__main__':
     parser.add_argument('--sample_num', type=int, default=-1, )
     parser.add_argument('--eval_only', action="store_true")
     parser.add_argument('--max_num_batched_tokens', type=int, default=2048)
+    parser.add_argument("--port", type=int, default=9010)
     parser.add_argument(
         "--use_consistency_decoding",
         action="store_true",
@@ -409,116 +300,172 @@ if __name__ == '__main__':
         default=16,
         help="The n-gram for consistency decoding.",
     ) 
+    parser.add_argument("--action_stat", type=str,
+                        default="/mnt/sda/wenxuansong/data/dataset/task_ABC_D/training/statistics.yaml")
+    parser.add_argument("--image_folder", type=str,
+                        default="/home/wenxuansong/chenjy/data/calvin_cvla/task_ABC_D/vla_processed_r5")
+    parser.add_argument("--model_path", type=str,
+                        default="/home/wenxuansong/chenjy/project/vlas/LLaVA/checkpoints/llava-v1.5-7b-calvin-rel-obs-reduce5-v1-abc2d_2024_01_29")   
     args = parser.parse_args()
     max_new_token = args.max_tokens
-    action_stat = "/mnt/sda/wenxuansong/data/dataset/task_ABC_D/training/statistics.yaml"
-    image_folder = "/home/wenxuansong/chenjy/data/calvin_cvla/task_ABC_D/vla_processed_r5"
-    model_path="/home/wenxuansong/chenjy/project/vlas/LLaVA/checkpoints/llava-v1.5-7b-calvin-rel-obs-reduce5-v1-abc2d_2024_12_25"
+    action_stat = args.action_stat
+    image_folder = args.image_folder
+    model_path=args.model_path
     vla_model_initialization = CLLMRobotgenerate(model_path,action_stat,image_folder)
-    if args.eval_only == False:
-        # part 1 we set the model and tokenizer
-        # model = transformers.AutoModelForCausalLM.from_pretrained(
-        #     args.model_dir,
-        #     torch_dtype=torch.bfloat16,
-        #     low_cpu_mem_usage=True,
-        #     device_map='cuda',
-        # )
-        # tokenizer = transformers.AutoTokenizer.from_pretrained(
-        #     args.model_dir,
-        #     padding_side="right",
-        #     use_fast=False,
-        # )
-        model=vla_model_initialization.vla_model
-        action_tokenizer=vla_model_initialization.action_tokenizer
-        tokenizer=vla_model_initialization.tokenizer
-        print('>>>>>> model and tokenizer loaded')
+    model=vla_model_initialization.vla_model
+    action_tokenizer=vla_model_initialization.action_tokenizer
+    tokenizer=vla_model_initialization.tokenizer
+    print('>>>>>> model and tokenizer loaded')
+    not_cvla=False
+    flask_app = Flask(__name__)
+    @flask_app.route("/predict", methods=["POST"])
+    def predict():
+        if request.method == "POST":
+            img_static = np.frombuffer(request.files["img_static"].read(), dtype=np.uint8)
+            img_static = img_static.reshape((200, 200, 3))
+            img_gripper = np.frombuffer(request.files["img_gripper"].read(), dtype=np.uint8)
+            img_gripper = img_gripper.reshape((84, 84, 3))
 
-        # part 2 we prepare raw queries and wrap them with target prompt
-        test_file="/home/wenxuansong/chenjy/project/vlas/LLaVA/playground/calvin_data/test.json"
-        # raw_queries = get_raw_inputs(args.dev_set)
-        # prompt = prompt_mapping[args.prompt_type]
-        # processed_prompts = [prompt.format(input=query) for query in raw_queries]
-        # processed_prompts = processed_prompts[:args.sample_num] if args.sample_num > 0 else processed_prompts
-        with open(test_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            content = request.files["json"].read()
+            content = json.loads(content)
+            instruction = content["instruction"]
+            robot_obs = content["robot_obs"]
+
+            img_static = Image.fromarray(img_static)
+            img_gripper = Image.fromarray(img_gripper)
+
+            input_ids, image_tensor = vla_model_initialization.compose_robot_input_for_calvin(
+                img_static, img_gripper, instruction, robot_obs
+            )
+            if not_cvla:
+                action = vla_model_initialization.robot_action_generate(input_ids, image_tensor)
+                print(action)
+                return jsonify(action.tolist())
+            else :
+                time1 = time.time()
+                output_ids_cvla = consistency_generate_cvla(
+                    input_ids=input_ids,
+                    image_tensor=image_tensor,
+                    model=model,
+                    tokenizer=tokenizer,
+                    max_new_tokens=args.max_new_tokens_for_consistency,
+                    max_new_seq_len=max_new_token,
+                    vla_model_initialization=vla_model_initialization,
+                    device=model.device
+                )
+                time2 = time.time()
+                print("一致性生成时间:",time2-time1)
+                # print("output_ids_cvla.dtype:",output_ids_cvla.dtype)
+                output_ids_cvla_list = output_ids_cvla
+                print(output_ids_cvla_list)
+                return jsonify(output_ids_cvla_list)
+
+    flask_app.run(host="0.0.0.0", port=args.port)
+    # if args.eval_only == False:
+    #     # part 1 we set the model and tokenizer
+    #     # model = transformers.AutoModelForCausalLM.from_pretrained(
+    #     #     args.model_dir,
+    #     #     torch_dtype=torch.bfloat16,
+    #     #     low_cpu_mem_usage=True,
+    #     #     device_map='cuda',
+    #     # )
+    #     # tokenizer = transformers.AutoTokenizer.from_pretrained(
+    #     #     args.model_dir,
+    #     #     padding_side="right",
+    #     #     use_fast=False,
+    #     # )
+    #     model=vla_model_initialization.vla_model
+    #     action_tokenizer=vla_model_initialization.action_tokenizer
+    #     tokenizer=vla_model_initialization.tokenizer
+    #     print('>>>>>> model and tokenizer loaded')
+ 
+    #     # part 2 we prepare raw queries and wrap them with target prompt
+    #     test_file="/home/wenxuansong/chenjy/project/vlas/LLaVA/playground/calvin_data/test.json"
+    #     # raw_queries = get_raw_inputs(args.dev_set)
+    #     # prompt = prompt_mapping[args.prompt_type]
+    #     # processed_prompts = [prompt.format(input=query) for query in raw_queries]
+    #     # processed_prompts = processed_prompts[:args.sample_num] if args.sample_num > 0 else processed_prompts
+    #     with open(test_file, "r", encoding="utf-8") as f:
+    #         data = json.load(f)
     
-        processed_data=vla_model_initialization.preprocess_vla_data(data, tokenizer,action_tokenizer)
-        results=[]
-        # part 3 we generate answers
-        for raw_data in tqdm(processed_data):
-            # print(raw_data)
-            input_ids = torch.Tensor(raw_data['sources_input_ids']).squeeze(0).to(device=model.device, dtype=torch.int)
-            label_ids=raw_data["labels_ids"]
-            image_tensor=raw_data["image_tensor"].to(device=model.device, dtype=torch.int)
+    #     processed_data=vla_model_initialization.preprocess_vla_data(data, tokenizer,action_tokenizer)
+        
+    #     results=[]
+    #     # part 3 we generate answers
+    #     for raw_data in tqdm(processed_data):
+    #         # print(raw_data)
+    #         input_ids = torch.Tensor(raw_data['sources_input_ids']).squeeze(0).to(device=model.device, dtype=torch.int)#2d
+    #         label_ids=raw_data["labels_ids"]
+    #         image_tensor=raw_data["image_tensor"].to(device=model.device, dtype=torch.float32)
            
-            # if args.use_consistency_decoding:
-            output_ids_cvla = consistency_generate_cvla(
-                raw_data=raw_data,
-                model=model,
-                tokenizer=tokenizer,
-                max_new_tokens=args.max_new_tokens_for_consistency,
-                max_new_seq_len=max_new_token,
-                vla_model_initialization=vla_model_initialization,
-                device=model.device
-            )
-            output_ids_cvla = output_ids_cvla.unsqueeze(dim=0)
-                # print("output_ids:",output_ids)
-            # else:
-            output_ids_vla = vla_model_initialization.robot_action_generate(
-                input_ids,
-                image_tensor
-                # do_sample=False,
-                # temperature=args.temperature,
-                # max_new_tokens=max_new_token,
-            )
-            output_ids_vla=torch.tensor(output_ids_vla).unsqueeze(dim=0)
-            # print("output_ids.shape:",output_ids.shape)
-            # output_ids_tmp=output_ids
-            # if model.config.is_encoder_decoder:
-            #     output_ids = output_ids[0]
-            # else:
-            #     output_ids = output_ids[0][len(input_ids[0]) :]
+    #         # if args.use_consistency_decoding:
+    #         output_ids_cvla = consistency_generate_cvla(
+    #             raw_data=raw_data,
+    #             model=model,
+    #             tokenizer=tokenizer,
+    #             max_new_tokens=args.max_new_tokens_for_consistency,
+    #             max_new_seq_len=max_new_token,
+    #             vla_model_initialization=vla_model_initialization,
+    #             device=model.device
+    #         )
+    #         output_ids_cvla = output_ids_cvla.unsqueeze(dim=0)
+    #             # print("output_ids:",output_ids)
+    #         # else:
+    #         output_ids_vla = vla_model_initialization.robot_action_generate(
+    #             input_ids,
+    #             image_tensor
+    #             # do_sample=False,
+    #             # temperature=args.temperature,
+    #             # max_new_tokens=max_new_token,
+    #         )
+    #         output_ids_vla=torch.tensor(output_ids_vla).unsqueeze(dim=0)
+    #         # print("output_ids.shape:",output_ids.shape)
+    #         # output_ids_tmp=output_ids
+    #         # if model.config.is_encoder_decoder:
+    #         #     output_ids = output_ids[0]
+    #         # else:
+    #         #     output_ids = output_ids[0][len(input_ids[0]) :]
 
-            # output = tokenizer.decode(
-            #     output_ids,
-            #     spaces_between_special_tokens=False,
-            # )
-            # for special_token in tokenizer.special_tokens_map.values():
-            #     if isinstance(special_token, list):
-            #         for special_tok in special_token:
-            #             output = output.replace(special_tok, "")
-            #     else:
-            #         output = output.replace(special_token, "")
-            # output = output.strip()
-            results.append({'output_ids_cvla': output_ids_cvla[:,-35:],'output_ids_vla':output_ids_vla ,'label_ids': label_ids})
-        print('>>>>>> generation done')
+    #         # output = tokenizer.decode(
+    #         #     output_ids,
+    #         #     spaces_between_special_tokens=False,
+    #         # )
+    #         # for special_token in tokenizer.special_tokens_map.values():
+    #         #     if isinstance(special_token, list):
+    #         #         for special_tok in special_token:
+    #         #             output = output.replace(special_tok, "")
+    #         #     else:
+    #         #         output = output.replace(special_token, "")
+    #         # output = output.strip()
+    #         results.append({'output_ids_cvla': output_ids_cvla[:,-35:],'output_ids_vla':output_ids_vla ,'label_ids': label_ids})
+    #     print('>>>>>> generation done')
 
-        # part 5 we save the results, always be {'id':id,'response':response}
-        # if dir of output file is not exist, it will be created automatically
-        # Writing predictions to the output file
-        with open(args.output_file_name, "w") as f:
-            for idx, result in enumerate(results):
-                # Convert tensors to lists for JSON serialization
-                output_data = {
-                    "id": idx,
-                    "output_ids_cvla": result["output_ids_cvla"].tolist(),
-                    "output_ids_vla":result["output_ids_vla"].tolist(),
-                    "label_ids": result["label_ids"].tolist()[:-1],
-                }
-                # Write formatted JSON with indentation
-                f.write(json.dumps(output_data) + "\n")
+    #     # part 5 we save the results, always be {'id':id,'response':response}
+    #     # if dir of output file is not exist, it will be created automatically
+    #     # Writing predictions to the output file
+    #     with open(args.output_file_name, "w") as f:
+    #         for idx, result in enumerate(results):
+    #             # Convert tensors to lists for JSON serialization
+    #             output_data = {
+    #                 "id": idx,
+    #                 "output_ids_cvla": result["output_ids_cvla"].tolist(),
+    #                 "output_ids_vla":result["output_ids_vla"].tolist(),
+    #                 "label_ids": result["label_ids"].tolist()[:-1],
+    #             }
+    #             # Write formatted JSON with indentation
+    #             f.write(json.dumps(output_data) + "\n")
 
-            print(">>>>>> Writing predictions completed successfully.")
+    #         print(">>>>>> Writing predictions completed successfully.")
 
-    # part 6 evaluate, I guess this should be done in a separate script
-    # 读取jsonline文件的步骤
+    # # part 6 evaluate, I guess this should be done in a separate script
+    # # 读取jsonline文件的步骤
 
-        id_diffs = calculate_absolute_difference(args.output_file_name)
-        print(id_diffs)
+    #     id_diffs = calculate_absolute_difference(args.output_file_name)
+    #     print(id_diffs)
 
 
-    # get_results(args.output_file_name, args.dev_set)
-    # print('>>>>>> evaluation done')
+    # # get_results(args.output_file_name, args.dev_set)
+    # # print('>>>>>> evaluation done')
 
 
 # CUDA_VISIBLE_DEVICES=0 acc.py --model_dir path_to_cllm --temperature 0.0 --top_p 1.0 --output_file_name 'cllm_generated_gsm8k.jsonl' --dev_set "gsm8k" --prompt_type math-single --max_new_tokens_for_consistency 16 --max_tokens 1024 --use_consistency_decoding

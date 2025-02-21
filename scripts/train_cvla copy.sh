@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=1
 export WANDB_PROJECT=consistency_cvla
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 model_path=/home/wenxuansong/chenjy/project/vlas/LLaVA/llava-v1.5-7b

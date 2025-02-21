@@ -296,7 +296,7 @@ def cvla_jacobi_forward_profiling(
             use_legacy_cache = not isinstance(past_key_values, Cache)
             if use_legacy_cache:
                 past_key_values = DynamicCache.from_legacy_cache(past_key_values)
-            past_key_values_length = past_key_values.get_usable_length(seq_length) 
+            past_key_values_length = past_key_values.get_usable_length(seq_length) #根据当前序列长度和缓存中的历史状态来计算出可以复用的部分
 
         if position_ids is None:
             device = input_ids.device if input_ids is not None else inputs_embeds.device
@@ -426,14 +426,14 @@ def cvla_jacobi_forward_profiling(
 
             logits = logits.float()
             all_shift_one_token = torch.argmax(torch.nn.functional.softmax(logits, dim=-1) / 0.01, dim=-1)
-            next_point= torch.cat((current_point[0, 0].view(1,-1), all_shift_one_token[0, -max_new_tokens:-1].view(1,-1)), dim=-1)
+            next_point= torch.cat((current_point[0, 0].view(1,-1), all_shift_one_token[0, -max_new_tokens:-1].view(1,-1)), dim=-1)#2维度 [1,16]
             print("next_point.shape:",next_point.shape)
             jacobian_trajectory.append(next_point)
             
             if torch.all(torch.eq(current_point, next_point)).item():    
                 print('Successfully break!')
-                print(next_point)
-                first_correct_token = torch.argmax(torch.nn.functional.softmax(logits, dim=-1), dim=-1)[:,-1]
+                # print(next_point)#16
+                first_correct_token = torch.argmax(torch.nn.functional.softmax(logits, dim=-1), dim=-1)[:,-1]#2维
                 break
             past_key_values.delete_false_key_value(seq_length)
 

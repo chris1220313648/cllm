@@ -1,0 +1,369 @@
+{
+    "fix_points": 10,
+    "fast_forward": 2.1666666666666665,
+    "fix_points_per_gram": [
+        4,
+        4,
+        2
+    ]
+}
+{
+    "fix_points": 5,
+    "fast_forward": 1.9592592592592595,
+    "fix_points_per_gram": [
+        2,
+        2,
+        1
+    ]
+}
+{
+    "fix_points": 6,
+    "fast_forward": 1.803030303030303,
+    "fix_points_per_gram": [
+        2,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 1.8515151515151516,
+    "fix_points_per_gram": [
+        2,
+        3,
+        2
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 1.9000000000000001,
+    "fix_points_per_gram": [
+        4,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 9,
+    "fast_forward": 1.776923076923077,
+    "fix_points_per_gram": [
+        5,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 1.8515151515151516,
+    "fix_points_per_gram": [
+        3,
+        4,
+        1
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 2.187830687830688,
+    "fix_points_per_gram": [
+        4,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 9,
+    "fast_forward": 2.0054945054945055,
+    "fix_points_per_gram": [
+        2,
+        5,
+        2
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 1.8703703703703702,
+    "fix_points_per_gram": [
+        2,
+        3,
+        2
+    ]
+}
+{
+    "fix_points": 9,
+    "fast_forward": 2.033333333333333,
+    "fix_points_per_gram": [
+        3,
+        4,
+        2
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 2.0185185185185186,
+    "fix_points_per_gram": [
+        4,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 4,
+    "fast_forward": 1.7284382284382283,
+    "fix_points_per_gram": [
+        2,
+        2,
+        0
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 2.7925925925925927,
+    "fix_points_per_gram": [
+        4,
+        4,
+        0
+    ]
+}
+{
+    "fix_points": 9,
+    "fast_forward": 2.8518518518518516,
+    "fix_points_per_gram": [
+        5,
+        4,
+        0
+    ]
+}
+{
+    "fix_points": 10,
+    "fast_forward": 2.925925925925926,
+    "fix_points_per_gram": [
+        5,
+        5,
+        0
+    ]
+}
+{
+    "fix_points": 9,
+    "fast_forward": 2.925925925925926,
+    "fix_points_per_gram": [
+        4,
+        5,
+        0
+    ]
+}
+{
+    "fix_points": 10,
+    "fast_forward": 1.9592592592592595,
+    "fix_points_per_gram": [
+        3,
+        5,
+        2
+    ]
+}
+{
+    "fix_points": 6,
+    "fast_forward": 1.8703703703703702,
+    "fix_points_per_gram": [
+        3,
+        2,
+        1
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 1.803030303030303,
+    "fix_points_per_gram": [
+        4,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 2.0396825396825395,
+    "fix_points_per_gram": [
+        2,
+        4,
+        2
+    ]
+}
+{
+    "fix_points": 6,
+    "fast_forward": 2.595959595959596,
+    "fix_points_per_gram": [
+        3,
+        3,
+        0
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 2.925925925925926,
+    "fix_points_per_gram": [
+        4,
+        4,
+        0
+    ]
+}
+{
+    "fix_points": 9,
+    "fast_forward": 2.9134199134199132,
+    "fix_points_per_gram": [
+        4,
+        5,
+        0
+    ]
+}
+{
+    "fix_points": 13,
+    "fast_forward": 3.222222222222222,
+    "fix_points_per_gram": [
+        8,
+        5,
+        0
+    ]
+}
+{
+    "fix_points": 10,
+    "fast_forward": 3.1481481481481484,
+    "fix_points_per_gram": [
+        5,
+        5,
+        0
+    ]
+}
+{
+    "fix_points": 12,
+    "fast_forward": 3.021164021164021,
+    "fix_points_per_gram": [
+        6,
+        6,
+        0
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 2.7037037037037037,
+    "fix_points_per_gram": [
+        2,
+        5,
+        0
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 2.9134199134199132,
+    "fix_points_per_gram": [
+        3,
+        4,
+        0
+    ]
+}
+{
+    "fix_points": 6,
+    "fast_forward": 1.7626262626262628,
+    "fix_points_per_gram": [
+        2,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 9,
+    "fast_forward": 1.984848484848485,
+    "fix_points_per_gram": [
+        5,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 1.803030303030303,
+    "fix_points_per_gram": [
+        3,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 8,
+    "fast_forward": 1.9000000000000001,
+    "fix_points_per_gram": [
+        2,
+        4,
+        2
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 2.033333333333333,
+    "fix_points_per_gram": [
+        2,
+        3,
+        2
+    ]
+}
+{
+    "fix_points": 12,
+    "fast_forward": 1.984848484848485,
+    "fix_points_per_gram": [
+        4,
+        6,
+        2
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 1.722222222222222,
+    "fix_points_per_gram": [
+        2,
+        3,
+        2
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 1.8515151515151516,
+    "fix_points_per_gram": [
+        2,
+        3,
+        2
+    ]
+}
+{
+    "fix_points": 7,
+    "fast_forward": 1.8515151515151516,
+    "fix_points_per_gram": [
+        4,
+        3,
+        0
+    ]
+}
+{
+    "fix_points": 6,
+    "fast_forward": 1.803030303030303,
+    "fix_points_per_gram": [
+        2,
+        2,
+        2
+    ]
+}
+{
+    "fix_points": 5,
+    "fast_forward": 1.9592592592592595,
+    "fix_points_per_gram": [
+        2,
+        1,
+        2
+    ]
+}
+{
+    "fix_points": 5,
+    "fast_forward": 1.484848484848485,
+    "fix_points_per_gram": [
+        2,
+        2,
+        1
+    ]
+}

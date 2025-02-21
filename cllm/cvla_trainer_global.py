@@ -51,7 +51,7 @@ class LabelSmoother:
         nll_loss = log_probs.gather(dim=-1, index=labels)
         # works for fp16 input tensor too, by internally upcasting it to fp32
         smoothed_loss = log_probs.sum(dim=-1, keepdim=True, dtype=torch.float32)
-
+        # print("ar_ouuput_mask:",padding_mask)
         nll_loss.masked_fill_(padding_mask, 0.0)
         smoothed_loss.masked_fill_(padding_mask, 0.0)
 
@@ -341,7 +341,7 @@ class CllmTrainer(Trainer):
         # print("input_masks dtype:", input_masks.dtype, "device:", input_masks.device)
 
         image_tensor = inputs["image_tensor"]
-        # print("image_tensor dtype:", image_tensor.dtype, "device:", image_tensor.device)
+        # print("image_tensor shape:", image_tensor.shape, "device:", image_tensor.device)
 
         bsz = jacobian_trajectory[0].shape[0]
         eos_reached = torch.tensor([False] * bsz).to(model.device)
@@ -371,7 +371,8 @@ class CllmTrainer(Trainer):
         attention_mask = torch.full_like(labels, 1).to(model.device)
         # print("attention_mask shape:", attention_mask.shape)
         # print("attention_mask dtype:", attention_mask.dtype, "device:", attention_mask.device)
-
+        # print("labels shape:", labels.shape)
+        # print("labels :", labels)
         vla_model_initialization = self.vla_model_initialization
         input_embeds = vla_model_initialization.embedding_generate(labels.clone(), image_tensor)
         # print("input_embeds shape:", input_embeds.shape)
@@ -383,8 +384,20 @@ class CllmTrainer(Trainer):
         output_length = label_student_model_output['logits'].shape[1]#655
         label_length = labels.shape[1]#84
         part1 = label_student_model_output['logits'][0, :image_indices[0], :]
+        # print("label_student_model_output['logits'] shape:", label_student_model_output['logits'].shape)
+        # print("part1 shape:", part1.shape)
         part2 = label_student_model_output['logits'][0, -(label_length-image_indices[0]):, :]
+        # print("part2 shape:", part2.shape)
+        # print("labels shape:", labels.shape)
         logits = torch.cat((part1, part2), dim=0).unsqueeze(0)
+        
+        log_probs = torch.argmax(torch.nn.functional.log_softmax(logits, dim=-1) / 0.01, dim=-1)
+        print("log_probs_logist) :", log_probs)
+        # tokenizer=vla_model_initialization.tokenizer
+        # decoded_log_probs = tokenizer.decode(log_probs[0].tolist())
+        # print("Decoded decoded_log_probs:",decoded_log_probs )
+        # decoded_labels = tokenizer.decode([t for t in labels[0].tolist() if t >= 0])
+        # print("Decoded labels:",decoded_labels )
         logits_last = self.get_logits(model, jacobian_trajectory[-1].clone().detach(), attention_mask, image_tensor, vla_model_initialization)
         # print("logits_last dtype:", logits_last.dtype, "device:", logits_last.device)
 
@@ -409,6 +422,7 @@ class CllmTrainer(Trainer):
         # print("logits_i dtype:", logits_i.dtype, "device:", logits_i.device)
 
         output_mask = jacobian_trajectory[i][..., 1:] == self.tokenizer.pad_token_id
+        # print("loss_global_output_mask :", output_mask, "device:", output_mask.device)
         # print("output_mask dtype:", output_mask.dtype, "device:", output_mask.device)
 
         loss_global = self.soft_cross_entropy(

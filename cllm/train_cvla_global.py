@@ -22,7 +22,7 @@ import json
 import math
 import pathlib
 from typing import Dict, Optional
-
+import time
 import os
 import sys
 import torch
@@ -53,7 +53,7 @@ from llava.action_tokenizer import ActionTokenizer, encode_robot_obs,encode_acti
 from llava.constants import DEFAULT_IMAGE_TOKEN, DEFAULT_AUDIO_TOKEN,IMAGE_TOKEN_INDEX
 from llava.mm_utils import tokenizer_image_token
 from llava.utils import disable_torch_init
-
+TARGET_IMG_SIZE = 334
 logger = logging.getLogger(__name__)
 
 IGNORE_TOKEN_ID = LabelSmoother.ignore_index
@@ -105,7 +105,45 @@ class CLLMRobotgenerate:
             dim=0,
         )
         return input_ids, image_tensor
-    
+    def compose_robot_input_for_calvin(
+        self, img_static, img_gripper, instruction, robot_obs, debug=True
+    ):
+        img_static = img_static.resize(
+            (TARGET_IMG_SIZE, TARGET_IMG_SIZE // 2), Image.LANCZOS
+        )
+        img_gripper = img_gripper.resize(
+            (TARGET_IMG_SIZE, TARGET_IMG_SIZE // 2), Image.LANCZOS
+        )
+        img_concat = Image.new("RGB", (TARGET_IMG_SIZE, TARGET_IMG_SIZE))
+        img_concat.paste(img_static, (0, 0))
+        img_concat.paste(img_gripper, (0, TARGET_IMG_SIZE // 2))
+
+        if debug:
+            img_concat.save("./debug_img.png", "PNG")
+
+        # The image height is equal to the width, thus no pad or square
+        image_tensor = self.image_processor.preprocess(img_concat, return_tensors="pt")[
+            "pixel_values"
+        ][0]
+        image_tensor = image_tensor[None, :]
+        print("image_tensor.dtype", image_tensor.dtype)
+        robot_obs = [str(elem) for elem in robot_obs]
+        robot_obs = " ".join(robot_obs)
+        robot_obs = encode_robot_obs(robot_obs, self.action_tokenizer, self.action_stat)
+
+        instruction = DEFAULT_IMAGE_TOKEN + "\n" + instruction + "\n" + robot_obs
+        conv = conversation_lib.default_conversation.copy()
+        conv.system = "A chat between a curious user and an artificial intelligence robot. The robot provides actions to follow out the user's instructions."
+        conv.append_message(conv.roles[0], instruction)
+        conv.append_message(conv.roles[1], None)
+        instruction = conv.get_prompt()
+
+        input_ids = torch.stack(
+            [tokenizer_image_token(instruction, self.tokenizer, return_tensors="pt")],
+            dim=0,
+        )
+        print("input_ids为", input_ids)
+        return input_ids, image_tensor
     def embedding_generate(self, input_ids, images,image_sizes: Optional[torch.Tensor] = None):
         position_ids=None
         attention_mask=None
@@ -163,7 +201,7 @@ class CLLMRobotgenerate:
             image_folder = self.image_folder
             image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
             input_ids, image_tensor = self.compose_robot_input( prompt,image)#input_id: torch.Size([1, 64])和原来的input_id长度不一样
-            # print("image_tensor.shape",image_tensor.shape)
+            print("image_tensor.shape:",image_tensor.shape)
             
             if len(prompt) > 1024:
                 # exclude prompts that are too long
@@ -217,7 +255,7 @@ class CLLMRobotgenerate:
             _type_: _description_
         """
         # print("images.shape",images.shape)
-        # time0 = time.time()
+        time0 = time.time()
         with torch.inference_mode():
             output_ids = self.vla_model.generate(
                 input_ids.cuda(),
@@ -230,19 +268,19 @@ class CLLMRobotgenerate:
                 use_cache=True,
             )
         memory_used = torch.cuda.memory_allocated() / 1024**3  # 当前显存使用（GB）
-        # time1 = time.time()
+        time1 = time.time()
         # memory_samples.append(memory_used)
-        # generate_time = time1 - time0
+        generate_time = time1 - time0
         # inference_times.append(generate_time)
         # print("推理一次需要的时间为", generate_time)
         
         # skip the <s> and </s> special token
-        # print("output_ids.shape",output_ids.shape)
+        # print("output_ids",output_ids)
         output_ids = output_ids[0].cpu().numpy().tolist()[2:-1]
-        actions = output_ids
-        # for elem in output_ids:
-            # actions.append(self.action_tokenizer.decode_token_ids_to_actions(elem))
-        # actions = np.array(actions)
+        actions = []
+        for elem in output_ids:
+            actions.append(self.action_tokenizer.decode_token_ids_to_actions(elem))
+        actions = np.array(actions)
         return actions
 @dataclass
 class ModelArguments:
@@ -341,7 +379,7 @@ def preprocess_distill_data(
             labels_ids=labels_ids,#2维
             teacher_output_ids=teacher_output_ids,#1维
             complete_teacher_output_ids=complete_teacher_output_ids,#1维
-            image_tensor=image_tensor
+            image_tensor=image_tensor #4维
         )
     else:
         return dict(
@@ -402,7 +440,7 @@ class JacobianDataset(Dataset):
                             self.model,
                             self.image_processor,
                             self.image_folder)
-        self.cached_data_dict[i] = ret # cjy 20250108 怀疑是爆内存导致训练失败，为了节省内存，不缓存数据
+        self.cached_data_dict[i] = ret # 
 
         return ret
 

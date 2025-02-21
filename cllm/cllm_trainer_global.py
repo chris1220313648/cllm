@@ -81,7 +81,7 @@ class CllmTrainer(Trainer):
         loss_ar*=10
         if self.args.qlora:
             loss_ar.requires_grad = True
-        # print(f'loss ar: {loss_ar} computed! performing backward pass...')
+        print(f'loss ar: {loss_ar} computed! performing backward pass...')
         with self.accelerator.accumulate(model):
             self.accelerator.backward(loss_ar)
 
@@ -109,7 +109,7 @@ class CllmTrainer(Trainer):
         )
         if self.args.qlora:
             loss_global.requires_grad = True
-        # print(f'loss global {loss_global} computed! performing backward pass...')
+        print(f'loss global {loss_global} computed! performing backward pass...')
         with self.accelerator.accumulate(model):
             self.accelerator.backward(loss_global)
         

@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=1
 export WANDB_PROJECT=consistency_cvla
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 model_path=/home/wenxuansong/chenjy/project/vlas/LLaVA/checkpoints/llava-v1.5-7b-calvin-rel-obs-reduce5-v1_zhaobo/checkpoint-21572
@@ -30,7 +30,7 @@ torchrun --nnodes=1 --nproc_per_node=1 --rdzv_id=101 --rdzv_endpoint='localhost:
     --logging_steps 10 \
     --model_max_length 512 \
     --lazy_preprocess True \
-    --fsdp "full_shard auto_wrap" \
-    --fsdp_transformer_layer_cls_to_wrap 'LlamaDecoderLayer' \
+    # --fsdp "full_shard auto_wrap" \
+    # --fsdp_transformer_layer_cls_to_wrap 'LlamaDecoderLayer' \
     # --qlora ${qlora}
     # bf16本来是true的，但是这里改成了false
